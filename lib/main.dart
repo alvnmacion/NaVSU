@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:navsu/ui/screens/signin_page.dart';
 import 'ui/screens/map_screen.dart'; // Import MapScreen
 
 void main() async {
@@ -26,7 +27,7 @@ class _MyAppState extends State<MyApp> {
 
   Future<Widget> _determineInitialScreen() async {
     try {
-      return const MapScreen(); // Load MapScreen
+      return const SignIn(); // Load MapScreen
     } catch (e) {
       print('Initialization error: $e');
       return const MapScreen(); // Load MapScreen as fallback

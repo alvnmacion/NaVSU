@@ -84,7 +84,7 @@ flutter:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/images/applogo.jpg"  # Path to your app icon
+  image_path: "assets/images/logo.jpg"  # Path to your app icon
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware.
 
