@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "646303813357",
+    "project_id": "navsu-fd152",
+    "storage_bucket": "navsu-fd152.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646303813357:android:75310569139b00e2b206e4",
+        "android_client_info": {
+          "package_name": "com.example.map"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrErs_yvT0pnij_B1OhOny42fxhCvsOlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646303813357:android:e0664f11408d147ab206e4",
+        "android_client_info": {
+          "package_name": "com.navsu.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrErs_yvT0pnij_B1OhOny42fxhCvsOlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
