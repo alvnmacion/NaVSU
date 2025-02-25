@@ -1,21 +1,27 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:vector_math/vector_math.dart' as vector;
+import 'package:flutter_compass/flutter_compass.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
+// Components
+import 'package:navsu/ui/screens/map_screen/components/current_location_marker.dart';
+import 'package:navsu/ui/screens/map_screen/components/search_bar.dart';
+import 'package:navsu/ui/screens/map_screen/components/bottom_info.dart';
+import 'package:navsu/ui/screens/map_screen/components/search_results.dart'; // Add import at the top
+// Dialogs
+import 'package:navsu/ui/dialog/landmark_details_dialog.dart';
 import 'package:navsu/ui/dialog/add_landmark_dialog.dart';
-import 'package:navsu/ui/dialog/landmark_details_dialog.dart'; // Import the new dialog
-import 'dart:math' as math; // Import math library
-import 'package:flutter_compass/flutter_compass.dart'; // Import flutter_compass
-import 'dart:ui' as Path;
 import 'package:navsu/ui/dialog/arrival_dialog.dart';
 import 'package:navsu/ui/dialog/cancel_navigation_dialog.dart';
-import 'package:navsu/ui/dialog/add_landmark_confirmation_dialog.dart';
+// Services
+import 'package:navsu/backend/firebaseauth.dart';
+import 'package:navsu/ui/screens/signin_page.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -57,6 +63,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   String _walkingEta = '';
   String _drivingEta = '';
   String _distance = '';
+  String? _userPhotoUrl;
+  String? _userName;
+  bool _isMenuOpen = false;
+  final LayerLink _menuLayerLink = LayerLink();
+  OverlayEntry? _menuOverlay;
 
   @override
   void initState() {
@@ -66,6 +77,137 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _fetchLandmarks();
     _searchFocusNode.addListener(_onSearchFocusChanged);
     _startCompassUpdates();
+    _loadUserDetails();
+  }
+
+  Future<void> _loadUserDetails() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userPhotoUrl = prefs.getString('photoUrl');
+      _userName = prefs.getString('name');
+    });
+  }
+
+  void _toggleMenu() {
+    if (_menuOverlay == null) {
+      _showMenu();
+    } else {
+      _hideMenu();
+    }
+  }
+
+  void _showMenu() {
+    _menuOverlay = _createMenuOverlay();
+    Overlay.of(context).insert(_menuOverlay!);
+    setState(() => _isMenuOpen = true);
+  }
+
+  void _hideMenu() {
+    _menuOverlay?.remove();
+    _menuOverlay = null;
+    setState(() => _isMenuOpen = false);
+  }
+
+  OverlayEntry _createMenuOverlay() {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    
+    return OverlayEntry(
+      builder: (context) => Positioned(
+        top: 110, // Position below the search bar
+        right: 16, // Align with the right margin
+        width: 250, // Fixed width for the menu
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundImage: _userPhotoUrl != null
+                            ? NetworkImage(_userPhotoUrl!)
+                            : null,
+                        child: _userPhotoUrl == null
+                            ? const Icon(Icons.person, size: 24)
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _userName ?? 'User',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (_userName != null) // Show email if available
+                              Text(
+                                'VSU Student',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: const Text(
+                    'Logout',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () async {
+                    _hideMenu();
+                    await FirebaseAuthService().signOut();
+                    if (mounted) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SignIn(),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _setupAnimations() {
@@ -522,245 +664,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildCurrentLocationMarker(double markerSize) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_pulseAnimation, _flashlightAnimation]),
-      builder: (context, child) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Flashlight cone
-            Transform.rotate(
-              angle: _compassRotation * (math.pi / 180),
-              child: CustomPaint(
-                size: Size(markerSize * 8, markerSize * 8), // Even bigger size
-                painter: FlashlightPainter(
-                  opacity: _flashlightAnimation.value,
-                  color: Colors.green,
-                  length: markerSize * 4, // Increased length
-                  width: markerSize * 2, // Increased width
-                ),
-              ),
-            ),
-            // Outer pulse circle
-            Transform.scale(
-              scale: 1.0 + (_pulseAnimation.value * 0.5),
-              child: Container(
-                width: markerSize,
-                height: markerSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.green.withOpacity(0.2 * (1 - _pulseAnimation.value)),
-                ),
-              ),
-            ),
-            // Main green circle
-            Container(
-              width: markerSize * 0.7,
-              height: markerSize * 0.7,
-              decoration: BoxDecoration(
-                color: Colors.green,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white,
-                  width: 3,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-            // Center dot
-            Container(
-              width: markerSize * 0.25,
-              height: markerSize * 0.25,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 50, 16, 0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        focusNode: _searchFocusNode,
-        decoration: InputDecoration(
-          hintText: 'Search VSU Landmarks...',
-          prefixIcon: const Icon(Icons.search, color: Colors.grey),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.grey),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {
-                      _searchResults.clear();
-                    });
-                  },
-                )
-              : null,
-        ),
-        onChanged: _searchLandmarks,
-      ),
-    );
-  }
-
-  Widget _buildSearchResults() {
-    if (_searchResults.isEmpty || !_searchFocusNode.hasFocus) return const SizedBox();
-
-    return Positioned(
-      top: 110,
-      left: 16,
-      right: 16,
-      child: Container(
-        constraints: const BoxConstraints(maxHeight: 300),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ListView.builder(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          itemCount: _searchResults.length,
-          itemBuilder: (context, index) {
-            final landmark = _searchResults[index];
-            return ListTile(
-              leading: const Icon(Icons.location_on, color: Colors.green),
-              title: Text(landmark['name']),
-              onTap: () {
-                _focusOnLandmark(landmark);
-                _searchFocusNode.unfocus();
-                _searchController.text = landmark['name'];
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomInfo() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildInfoColumn(
-                icon: Icons.directions_walk,
-                label: 'Walking',
-                value: _isNavigating ? _walkingEta : '0 min',
-              ),
-              _buildInfoColumn(
-                icon: Icons.directions_car,
-                label: 'Driving',
-                value: _isNavigating ? _drivingEta : '0 min',
-              ),
-              _buildInfoColumn(
-                icon: Icons.straighten,
-                label: 'Distance',
-                value: _isNavigating ? _distance : '0 km',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              if (_isNavigating)
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _showCancelNavigationDialog, // Updated to show confirmation
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade400,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 2,
-                    ),
-                    icon: const Icon(Icons.close),
-                    label: const Text(
-                      'Stop Navigation',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              if (_isNavigating)
-                const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _showAddLandmarkDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 2,
-                  ),
-                  icon: const Icon(Icons.add_location),
-                  label: const Text(
-                    'Add Landmark',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  void _handleLandmarkSelection(Map<String, dynamic> landmark) {
+    _focusOnLandmark(landmark);
+    _searchFocusNode.unfocus();
+    _searchController.text = landmark['name'];
   }
 
   @override
   Widget build(BuildContext context) {
-    double markerSize = _zoom > 12 ? 40.0 : 20.0; // Responsive marker size
+    double markerSize = _zoom > 12 ? 40.0 : 20.0;
     double routeStrokeWidth = _zoom > 12 ? 10.0 : 8.0;
 
     return Scaffold(
@@ -773,9 +685,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   options: MapOptions(
                     center: _currentLocation!,
                     zoom: _zoom,
-                    minZoom: 12.0, // Restrict minimum zoom
-                    maxZoom: 18.49, // Restrict maximum zoom
-                    rotation: _isNavigating ? _bearing : 0, // Only rotate when navigating
+                    minZoom: 12.0,
+                    maxZoom: 18.49,
+                    rotation: _isNavigating ? _bearing : 0,
                     onTap: (tapPosition, point) {
                       setState(() {
                         _destinationLocation = point;
@@ -790,8 +702,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                      urlTemplate: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
                       userAgentPackageName: 'com.example.app',
                     ),
                     PolylineLayer(
@@ -810,10 +721,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     MarkerLayer(
                       markers: [
                         Marker(
-                          width: markerSize * 6.0, // Increased to accommodate larger flashlight
+                          width: markerSize * 6.0,
                           height: markerSize * 6.0,
                           point: _currentLocation!,
-                          child: _buildCurrentLocationMarker(markerSize),
+                          child: CurrentLocationMarker(
+                            markerSize: markerSize,
+                            compassRotation: _compassRotation,
+                            pulseAnimation: _pulseAnimation,
+                            flashlightAnimation: _flashlightAnimation,
+                          ),
                         ),
                         if (_destinationLocation != null)
                           Marker(
@@ -837,88 +753,35 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-          _buildSearchBar(),
-          _buildSearchResults(),
+          MapSearchBar(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
+            onChanged: _searchLandmarks,
+            onProfileTap: _toggleMenu,
+            userPhotoUrl: _userPhotoUrl,
+            isMenuOpen: _isMenuOpen,
+            menuLayerLink: _menuLayerLink,
+          ),
+          SearchResults(
+            searchResults: _searchResults,
+            onLandmarkSelected: _handleLandmarkSelection,
+            isVisible: _searchResults.isNotEmpty && _searchFocusNode.hasFocus,
+          ),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _buildBottomInfo(),
+            child: BottomInfo(
+              walkingEta: _isNavigating ? _walkingEta : '0 min',
+              drivingEta: _isNavigating ? _drivingEta : '0 min',
+              distance: _isNavigating ? _distance : '0 km',
+              isNavigating: _isNavigating,
+              onCancelNavigation: _showCancelNavigationDialog,
+              onAddLandmark: _showAddLandmarkDialog,
+            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildInfoColumn({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.green),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class FlashlightPainter extends CustomPainter {
-  final double opacity;
-  final Color color;
-  final double length;
-  final double width;
-
-  FlashlightPainter({
-    required this.opacity,
-    required this.color,
-    required this.length,
-    required this.width,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          color.withOpacity(opacity * 0.9), // Increased from 0.7 to 0.9
-          color.withOpacity(opacity * 0.6), // Increased from 0.3 to 0.6
-          color.withOpacity(opacity * 0.3), // Added middle gradient stop
-          color.withOpacity(0),
-        ],
-        stops: const [0.0, 0.3, 0.6, 1.0], // Adjusted stops for smoother gradient
-        center: const Alignment(0.0, 0.5),
-        focal: const Alignment(0.0, 0.3), // Added focal point for more focused light
-        focalRadius: 0.3, // Added focal radius for light concentration
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    final path = Path.Path()
-      ..moveTo(size.width / 2, size.height / 2)
-      ..lineTo(size.width / 2 - width, -length) // Wider and longer cone
-      ..lineTo(size.width / 2 + width, -length)
-      ..close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(FlashlightPainter oldDelegate) =>
-      opacity != oldDelegate.opacity ||
-      length != oldDelegate.length ||
-      width != oldDelegate.width;
 }

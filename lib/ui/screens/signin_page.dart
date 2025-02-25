@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:navsu/backend/firebaseauth.dart';
 import 'package:navsu/ui/screens/map_screen.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -60,91 +61,83 @@ class SignIn extends StatelessWidget {
                     SizedBox(
                       height: logoHeight + 20,
                     ),
-                    Text(
-                      'Login',
-                      style: TextStyle(
-                        fontSize: fontSizeTitle,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          PageTransition(
-                            child: const MapScreen(),
-                            type: PageTransitionType.bottomToTop,
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: size.width,
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: paddingVertical / 2,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Login as Guest',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: fontSizeButton,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(fontSize: fontSizeButton),
+                        Text(
+                          'Welcome to NaVSU',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: fontSizeTitle,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF1A1A1A),
                           ),
                         ),
-                        const Expanded(child: Divider()),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Your ultimate navigation companion for Visayas State University. Find your way around campus with ease.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: fontSizeButton,
+                            color: Colors.grey[600],
+                            height: 1.5,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: () async {
-                        await _handleSignIn(context);
-                      },
-                      child: Container(
-                        width: size.width,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.black),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 55,
-                          vertical: paddingVertical / 2,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              height: isSmall ? 20 : isMedium ? 25 : 30,
-                              child: Image.asset('assets/images/google.png'),
+                    SizedBox(height: size.height * 0.08),
+                    Container(
+                      width: size.width,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(16),
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            spreadRadius: 1,
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => _handleSignIn(context),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Image.asset(
+                                  'assets/images/google.png',
+                                  height: 24,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Continue with Google',
+                                  style: TextStyle(
+                                    fontSize: fontSizeButton,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Login with Google',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontSize: fontSizeButton,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Text(
+                        'By continuing, you agree to our Terms of Service',
+                        style: TextStyle(
+                          fontSize: fontSizeButton - 2,
+                          color: Colors.grey[600],
                         ),
                       ),
                     ),
@@ -159,15 +152,19 @@ class SignIn extends StatelessWidget {
   }
 
   Future<void> _handleSignIn(BuildContext context) async {
-
-    Navigator.pushReplacement(
-                          context,
-                          PageTransition(
-                            child: const MapScreen(),
-                            type: PageTransitionType.bottomToTop,
-                          ),
-                        );
-   
+    FirebaseAuthService authService = FirebaseAuthService();
+    User? user = await authService.signInWithGoogle();
+    
+    if (user != null) {
+      await authService.saveUserDetails(user);
+      Navigator.pushReplacement(
+        context,
+        PageTransition(
+          child: const MapScreen(),
+          type: PageTransitionType.bottomToTop,
+        ),
+      );
+    }
   }
 
 }
