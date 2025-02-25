@@ -248,53 +248,65 @@ class _UserAuthorizationTabState extends State<UserAuthorizationTab> {
   Future<void> _showRoleMenu(BuildContext context, DocumentSnapshot userDoc, bool isAdmin) async {
     final String? selectedRole = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: false, // Ensures it stays at bottom
       backgroundColor: Colors.transparent,
-      builder: (BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.3, // Limit height to 30% of screen
+      ),
+      builder: (BuildContext context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Stack(
+          alignment: Alignment.bottomCenter,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Text(
-                'Change User Role',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+              color: Colors.transparent,
               ),
             ),
-            const Divider(),
-            for (String role in ['user', 'admin'])
-              ListTile(
-                leading: Icon(
-                  role == 'admin' ? Icons.admin_panel_settings : Icons.person,
-                  color: role == 'admin' ? Colors.green : Colors.grey[700],
-                ),
-                title: Text(
-                  role,
-                  style: TextStyle(
-                    color: role == 'admin' ? Colors.green : Colors.grey[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                onTap: () => Navigator.pop(context, role),
-                tileColor: userDoc['role'] == role 
-                    ? (role == 'admin' ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1))
-                    : null,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Text(
+                      'Change User Role',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  for (String role in ['user', 'admin'])
+                    ListTile(
+                      leading: Icon(
+                        role == 'admin' ? Icons.admin_panel_settings : Icons.person,
+                        color: role == 'admin' ? Colors.green : Colors.grey[700],
+                      ),
+                      title: Text(
+                        role,
+                        style: TextStyle(
+                          color: role == 'admin' ? Colors.green : Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () => Navigator.pop(context, role),
+                      tileColor: userDoc['role'] == role 
+                          ? (role == 'admin' ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1))
+                          : null,
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -303,25 +315,67 @@ class _UserAuthorizationTabState extends State<UserAuthorizationTab> {
     if (selectedRole != null && mounted && selectedRole != userDoc['role']) {
       final bool? confirmed = await showDialog<bool>(
         context: context,
-        builder: (BuildContext context) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Confirm Role Change'),
-          content: Text(
-            'Change role for "${userDoc['name'] ?? 'Unknown User'}" to ${selectedRole.toUpperCase()}?'
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+        barrierColor: Colors.black54,
+        builder: (BuildContext context) => Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                color: Colors.black12,
               ),
-              child: const Text('Confirm'),
+            ),
+            Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Confirm Role Change',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Change role for "${userDoc['name'] ?? 'Unknown User'}" to ${selectedRole.toUpperCase()}?',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel', style: TextStyle(color: Colors.black)),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Confirm'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

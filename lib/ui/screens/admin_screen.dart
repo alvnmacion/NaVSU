@@ -152,16 +152,17 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
   Future<void> _showLogoutDialog(BuildContext context) async {
     final bool? result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (BuildContext context) => Material(
+        type: MaterialType.transparency,
+        child: Center(
           child: Container(
+            margin: const EdgeInsets.all(32),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
@@ -236,13 +237,11 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
       ),
     );
 
-    if (result == true) {
+    if (result == true && mounted) {
       await _authService.signOut();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const SignIn()),
-        );
-      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const SignIn()),
+      );
     }
   }
 }

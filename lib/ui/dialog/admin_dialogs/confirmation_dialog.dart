@@ -21,16 +21,23 @@ class ConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+    return Material(
+      type: MaterialType.transparency,
+      child: Center(
         child: Container(
+          margin: const EdgeInsets.all(32),
+          constraints: const BoxConstraints(maxWidth: 400),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -53,7 +60,7 @@ class ConfirmationDialog extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                     TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(context, false),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.green,
                     ),
@@ -63,7 +70,7 @@ class ConfirmationDialog extends StatelessWidget {
                   ElevatedButton(
                     onPressed: () {
                       onConfirm();
-                      Navigator.pop(context);
+                      Navigator.pop(context, true);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: confirmColor ?? Colors.green,

@@ -99,6 +99,7 @@ class RewardsTab extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
+                          color: Colors.white,
                           itemBuilder: (context) => [
                             _buildPopupMenuItem('edit', Icons.edit, 'Edit'),
                             _buildPopupMenuItem('delete', Icons.delete, 'Delete'),
@@ -148,7 +149,7 @@ class RewardsTab extends StatelessWidget {
       value: value,
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.grey[700]),
+          Icon(icon, size: 20, color: Colors.green[700]),
           const SizedBox(width: 8),
           Text(text),
         ],
