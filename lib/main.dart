@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:navsu/ui/screens/signin_page.dart';
-import 'ui/screens/map_screen.dart'; // Import MapScreen
+import 'package:navsu/ui/screens/map_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,10 +28,22 @@ class _MyAppState extends State<MyApp> {
 
   Future<Widget> _determineInitialScreen() async {
     try {
-      return const SignIn(); // Load MapScreen
+      final prefs = await SharedPreferences.getInstance();
+      final String? userEmail = prefs.getString('email');
+      final String? userName = prefs.getString('name');
+      prefs.getString('photoUrl');
+
+      // Check if user data exists in SharedPreferences
+      if (userEmail != null && userName != null) {
+        print('Existing user session found: $userName');
+        return const MapScreen(); // User is logged in, go to MapScreen
+      } else {
+        print('No existing user session');
+        return const SignIn(); // No user session, go to SignIn
+      }
     } catch (e) {
-      print('Initialization error: $e');
-      return const MapScreen(); // Load MapScreen as fallback
+      print('Error checking user session: $e');
+      return const SignIn(); // On error, default to SignIn
     }
   }
 
@@ -48,11 +61,14 @@ class _MyAppState extends State<MyApp> {
       home: FutureBuilder<Widget>(
         future: _initialScreenFuture,
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return snapshot.data!;
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
-          // Return nothing while loading (keeps default native splash screen)
-          return const SizedBox.shrink();
+          if (snapshot.hasError) {
+            print('Error loading initial screen: ${snapshot.error}');
+            return const SignIn();
+          }
+          return snapshot.data ?? const SignIn();
         },
       ),
       debugShowCheckedModeBanner: false,

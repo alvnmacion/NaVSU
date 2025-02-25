@@ -65,6 +65,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   String _distance = '';
   String? _userPhotoUrl;
   String? _userName;
+  String? _userPoints; // Add this property
   bool _isMenuOpen = false;
   final LayerLink _menuLayerLink = LayerLink();
   OverlayEntry? _menuOverlay;
@@ -82,10 +83,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Future<void> _loadUserDetails() async {
     final prefs = await SharedPreferences.getInstance();
+    final points = prefs.getInt('points') ?? 0;
     setState(() {
       _userPhotoUrl = prefs.getString('photoUrl');
       _userName = prefs.getString('name');
+      _userPoints = _formatNumber(points);
     });
+  }
+
+  String _formatNumber(int number) {
+    return number.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
   }
 
   void _toggleMenu() {
@@ -108,15 +118,39 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     setState(() => _isMenuOpen = false);
   }
 
+  Future<void> _handleLogout() async {
+    try {
+      _hideMenu();
+      await FirebaseAuthService().signOut();
+      
+      if (!mounted) return;
+
+      // Use pushAndRemoveUntil to clear the navigation stack
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const SignIn(),
+        ),
+        (route) => false, // This will remove all previous routes
+      );
+    } catch (e) {
+      print('Logout error: $e');
+      // Still try to navigate to SignIn even if there's an error
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const SignIn(),
+        ),
+        (route) => false,
+      );
+    }
+  }
+
   OverlayEntry _createMenuOverlay() {
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-    
     return OverlayEntry(
       builder: (context) => Positioned(
-        top: 110, // Position below the search bar
-        right: 16, // Align with the right margin
-        width: 250, // Fixed width for the menu
+        top: 110,
+        right: 16,
+        width: 250,
         child: Material(
           color: Colors.transparent,
           child: Container(
@@ -139,40 +173,100 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   padding: const EdgeInsets.all(16.0),
                   decoration: BoxDecoration(
                     color: Colors.grey[50],
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundImage: _userPhotoUrl != null
-                            ? NetworkImage(_userPhotoUrl!)
-                            : null,
-                        child: _userPhotoUrl == null
-                            ? const Icon(Icons.person, size: 24)
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _userName ?? 'User',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (_userName != null) // Show email if available
-                              Text(
-                                'VSU Student',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundImage: _userPhotoUrl != null
+                                ? NetworkImage(_userPhotoUrl!)
+                                : null,
+                            child: _userPhotoUrl == null
+                                ? const Icon(Icons.person, size: 24)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _userName ?? 'User',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                Text(
+                                  'VSU Student',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.green.shade500,
+                              Colors.green.shade600,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withOpacity(0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.stars_rounded,
+                                  color: Colors.amber,
+                                  size: 26,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _userPoints ?? '0',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Navigation Points',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
+                            ),
                           ],
                         ),
                       ),
@@ -189,18 +283,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  onTap: () async {
-                    _hideMenu();
-                    await FirebaseAuthService().signOut();
-                    if (mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SignIn(),
-                        ),
-                      );
-                    }
-                  },
+                  onTap: _handleLogout,
                 ),
               ],
             ),
@@ -238,6 +321,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Cancel all subscriptions and timers
     _pulseAnimationController.dispose();
     _flashlightAnimationController.dispose();
     _recenterTimer?.cancel();
@@ -245,6 +329,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchFocusNode.dispose();
     _overlayEntry?.dispose();
+    _menuOverlay?.remove();
     _mapController.dispose(); // Dispose MapController
     _compassSubscription?.cancel(); // Cancel compass subscription
     super.dispose();
@@ -404,7 +489,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       final data = jsonDecode(response.body);
       final List<dynamic> coordinates =
           data['features'][0]['geometry']['coordinates'];
-      final double durationMinutes = data['features'][0]['properties']['segments'][0]['duration'] / 60;
+      final double durationSeconds = data['features'][0]['properties']['segments'][0]['duration'];
       final double distanceKm = data['features'][0]['properties']['segments'][0]['distance'] / 1000;
       
       setState(() {
@@ -412,9 +497,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             .map((coord) => LatLng(coord[1], coord[0]))
             .toList();
         _zoom = 18.49;
-        _walkingEta = '${durationMinutes.round()} min';
-        _distance = '${distanceKm.toStringAsFixed(1)} km';
-        _drivingEta = '${(durationMinutes / 3).round()} min'; // Rough estimate
+        
+        // Calculate minutes and seconds for walking
+        int walkingTotalSeconds = durationSeconds.round();
+        int walkingMinutes = walkingTotalSeconds ~/ 60;
+        int walkingSeconds = walkingTotalSeconds % 60;
+        _walkingEta = '${walkingMinutes}min ${walkingSeconds.toString().padLeft(2, '0')}s';
+        
+        // Calculate minutes and seconds for driving (roughly 1/3 of walking time)
+        int drivingTotalSeconds = (durationSeconds / 3).round();
+        int drivingMinutes = drivingTotalSeconds ~/ 60;
+        int drivingSeconds = drivingTotalSeconds % 60;
+        _drivingEta = '${drivingMinutes}min ${drivingSeconds.toString().padLeft(2, '0')}s';
+        
+        _distance = '${distanceKm.toStringAsFixed(2)} km';
       });
       _mapController.move(_currentLocation!, 18.49);
       _startNavigationUpdates();

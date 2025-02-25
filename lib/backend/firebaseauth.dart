@@ -37,6 +37,7 @@ class FirebaseAuthService {
           'email': user?.email,
           'name': user?.displayName,
           'photoUrl': user?.photoURL,
+          'points': 0,
         });
       }
 
@@ -71,6 +72,7 @@ class FirebaseAuthService {
     await prefs.remove('name');
     await prefs.remove('photoUrl');
     await prefs.remove('userRole');
+    await prefs.remove('points');
     // ...remove other user-specific keys if any...
   }
 
@@ -79,18 +81,37 @@ class FirebaseAuthService {
     await prefs.setString('email', user.email ?? '');
     await prefs.setString('name', user.displayName ?? '');
     await prefs.setString('photoUrl', user.photoURL ?? '');
+    await prefs.setInt('points', await getUserPoints(user) ?? 0);
+    
     //await prefs.setString('role', await getUserRole(user) ?? 'user');
   }
+
+  Future<int?> getUserPoints(User user) async {
+      try {
+        DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
+        if (doc.exists) {
+          return doc['points'] as int;
+        } else {
+          print('User document does not exist');
+          return null;
+        }
+      } catch (e) {
+        print(e.toString());
+        return null;
+      }
+    }
 
   Future<Map<String, String?>> getUserDetails() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? email = prefs.getString('email');
     String? name = prefs.getString('name');
     String? photoUrl = prefs.getString('photoUrl');
+    int? points = prefs.getInt('points');
     return {
       'email': email,
       'name': name,
       'photoUrl': photoUrl,
+      'points': points.toString(),
     };
   }
 
