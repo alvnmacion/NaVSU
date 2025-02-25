@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:navsu/ui/screens/signin_page.dart';
 import 'package:navsu/ui/screens/map_screen.dart';
+import 'package:navsu/ui/screens/admin_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,19 +32,24 @@ class _MyAppState extends State<MyApp> {
       final prefs = await SharedPreferences.getInstance();
       final String? userEmail = prefs.getString('email');
       final String? userName = prefs.getString('name');
-      prefs.getString('photoUrl');
+      final String? userRole = prefs.getString('role');
 
-      // Check if user data exists in SharedPreferences
       if (userEmail != null && userName != null) {
-        print('Existing user session found: $userName');
-        return const MapScreen(); // User is logged in, go to MapScreen
+        print('Existing user session found: $userName (Role: $userRole)');
+        
+        // Navigate based on user role
+        if (userRole == 'admin') {
+          return const AdminScreen();
+        } else {
+          return const MapScreen();
+        }
       } else {
         print('No existing user session');
-        return const SignIn(); // No user session, go to SignIn
+        return const SignIn();
       }
     } catch (e) {
       print('Error checking user session: $e');
-      return const SignIn(); // On error, default to SignIn
+      return const SignIn();
     }
   }
 
@@ -62,7 +68,13 @@ class _MyAppState extends State<MyApp> {
         future: _initialScreenFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                ),
+              ),
+            );
           }
           if (snapshot.hasError) {
             print('Error loading initial screen: ${snapshot.error}');

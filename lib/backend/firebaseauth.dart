@@ -48,18 +48,25 @@ class FirebaseAuthService {
     }
   }
 
-  Future<String?> getUserRole(User user) async {
+  Future<String> getUserRole(User user) async {
     try {
       DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
       if (doc.exists) {
-        return doc['role'];
+        return (doc.data() as Map<String, dynamic>)['role'] ?? 'user';
       } else {
-        print('User document does not exist');
-        return null;
+        // Create new user document with default role
+        await _firestore.collection('users').doc(user.uid).set({
+          'role': 'user',
+          'email': user.email,
+          'name': user.displayName,
+          'photoUrl': user.photoURL,
+          'points': 0,
+        });
+        return 'user';
       }
     } catch (e) {
-      print(e.toString());
-      return null;
+      print('Error getting user role: $e');
+      return 'user'; // Default to user role on error
     }
   }
 
@@ -77,13 +84,19 @@ class FirebaseAuthService {
   }
 
   Future<void> saveUserDetails(User user) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('email', user.email ?? '');
-    await prefs.setString('name', user.displayName ?? '');
-    await prefs.setString('photoUrl', user.photoURL ?? '');
-    await prefs.setInt('points', await getUserPoints(user) ?? 0);
-    
-    //await prefs.setString('role', await getUserRole(user) ?? 'user');
+    try {
+      final role = await getUserRole(user);
+      final points = await getUserPoints(user) ?? 0;
+
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('email', user.email ?? '');
+      await prefs.setString('name', user.displayName ?? '');
+      await prefs.setString('photoUrl', user.photoURL ?? '');
+      await prefs.setString('role', role);
+      await prefs.setInt('points', points);
+    } catch (e) {
+      print('Error saving user details: $e');
+    }
   }
 
   Future<int?> getUserPoints(User user) async {

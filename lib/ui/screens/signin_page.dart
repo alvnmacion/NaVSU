@@ -4,6 +4,7 @@ import 'package:navsu/ui/screens/map_screen.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart'; // Import this
+import 'package:navsu/ui/screens/admin_screen.dart';
 
 class SignIn extends StatelessWidget {
   const SignIn({super.key});
@@ -157,14 +158,19 @@ class SignIn extends StatelessWidget {
     
     if (user != null) {
       await authService.saveUserDetails(user);
-      Navigator.pushReplacement(
-        context,
-        PageTransition(
-          child: const MapScreen(),
-          type: PageTransitionType.bottomToTop,
-        ),
-      );
+      final role = await authService.getUserRole(user);
+
+      if (role == 'admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MapScreen()),
+        );
+      }
     }
   }
-
 }

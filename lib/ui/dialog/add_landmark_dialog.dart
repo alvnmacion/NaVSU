@@ -63,6 +63,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog> {
         'description': _descriptionController.text,
         'location': GeoPoint(_selectedLocation.latitude, _selectedLocation.longitude),
         'created_at': FieldValue.serverTimestamp(),
+        'status': 'pending',
       };
 
       await FirebaseFirestore.instance.collection('landmarks').add(landmark);
