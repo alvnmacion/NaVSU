@@ -6,11 +6,11 @@ class SearchResults extends StatelessWidget {
   final bool isVisible;
 
   const SearchResults({
-    Key? key,
+    super.key,
     required this.searchResults,
     required this.onLandmarkSelected,
     required this.isVisible,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

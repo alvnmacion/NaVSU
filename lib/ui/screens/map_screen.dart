@@ -367,6 +367,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('landmarks')
+          .where('status', isEqualTo: 'approved')
           .get();
 
       List<Map<String, dynamic>> results = snapshot.docs.map((doc) => doc.data()).toList();
@@ -581,8 +582,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Future<void> _fetchLandmarks() async {
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('landmarks').get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('landmarks')
+          .where('status', isEqualTo: 'approved')
+          .get();
 
       _landmarkMarkers.clear();
       _landmarkData.clear();
