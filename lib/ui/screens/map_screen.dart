@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:navsu/ui/screens/map_screen/components/loading_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -22,6 +23,7 @@ import 'package:navsu/ui/dialog/cancel_navigation_dialog.dart';
 // Services
 import 'package:navsu/backend/firebaseauth.dart';
 import 'package:navsu/ui/screens/signin_page.dart';
+import 'package:navsu/backend/points_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -69,16 +71,35 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _isMenuOpen = false;
   final LayerLink _menuLayerLink = LayerLink();
   OverlayEntry? _menuOverlay;
+  StreamSubscription<Position>? _positionStream;
+  StreamSubscription<Position>? _locationStream;
+  bool _isLocationReady = false;
+  StreamSubscription<Position>? _navigationStream;
+
+  // Add these new properties for distance tracking
+  final PointsService _pointsService = PointsService();
+  LatLng? _lastRecordedLocation;
+  double _totalDistanceTraveled = 0.0;
+  
+  // Minimum distance between points to consider for distance calculation (meters)
+  static const double _minDistanceThreshold = 5.0;
+  
+  // How often to save points to Firebase (in meters)
+  static const double _pointSaveThreshold = 100.0;
+
+  Timer? _arrivalCheckTimer;
+  int _pointsEarnedThisTrip = 0;
 
   @override
   void initState() {
     super.initState();
     _setupAnimations();
-    _getCurrentLocation();
+    _initializeLocation(); // Replace _getCurrentLocation() with this
     _fetchLandmarks();
     _searchFocusNode.addListener(_onSearchFocusChanged);
     _startCompassUpdates();
     _loadUserDetails();
+    _setupPointsTracking();
   }
 
   Future<void> _loadUserDetails() async {
@@ -319,8 +340,57 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _initializeLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      // Get initial location
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (mounted) {
+        setState(() {
+          _currentLocation = LatLng(position.latitude, position.longitude);
+          _isLocationReady = true;
+        });
+      }
+
+      // Start location updates
+      _locationStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5, // Update every 5 meters
+        ),
+      ).listen((Position position) {
+        if (mounted) {
+          setState(() {
+            _currentLocation = LatLng(position.latitude, position.longitude);
+            if (!_isNavigating) {
+              _mapController.move(_currentLocation!, _zoom);
+            }
+          });
+        }
+      });
+    } catch (e) {
+      print('Location initialization error: $e');
+    }
+  }
+
   @override
   void dispose() {
+    _locationStream?.cancel();
+    _navigationStream?.cancel();
     // Cancel all subscriptions and timers
     _pulseAnimationController.dispose();
     _flashlightAnimationController.dispose();
@@ -332,6 +402,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _menuOverlay?.remove();
     _mapController.dispose(); // Dispose MapController
     _compassSubscription?.cancel(); // Cancel compass subscription
+    // Save any remaining distance points before disposing
+    if (_totalDistanceTraveled > 0) {
+      _pointsService.recordDistanceTraveled(_totalDistanceTraveled);
+    }
+    _arrivalCheckTimer?.cancel();
     super.dispose();
   }
 
@@ -473,85 +548,94 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Future<void> _getRoute() async {
     if (_currentLocation == null || _destinationLocation == null) return;
 
+    // Cancel any existing navigation stream
+    await _navigationStream?.cancel();
+
     setState(() {
       _isNavigating = true;
-      _bearing = 0.0; // Reset bearing when starting navigation
-      _lastHeading = 0.0; // Reset heading when starting navigation
+      _bearing = 0.0;
+      _lastHeading = 0.0;
     });
 
-    const String apiKey =
-        '5b3ce3597851110001cf62483eb0593105fd4f87b3f72ee4aaedca67'; // Replace with your API key
-    final String url =
-        'https://api.openrouteservice.org/v2/directions/foot-walking?api_key=$apiKey&start=${_currentLocation!.longitude},${_currentLocation!.latitude}&end=${_destinationLocation!.longitude},${_destinationLocation!.latitude}';
+    try {
+      const String apiKey = '5b3ce3597851110001cf62483eb0593105fd4f87b3f72ee4aaedca67';
+      final String url =
+          'https://api.openrouteservice.org/v2/directions/foot-walking?api_key=$apiKey&start=${_currentLocation!.longitude},${_currentLocation!.latitude}&end=${_destinationLocation!.longitude},${_destinationLocation!.latitude}';
 
-    final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url));
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final List<dynamic> coordinates =
-          data['features'][0]['geometry']['coordinates'];
-      final double durationSeconds = data['features'][0]['properties']['segments'][0]['duration'];
-      final double distanceKm = data['features'][0]['properties']['segments'][0]['distance'] / 1000;
-      
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> coordinates = data['features'][0]['geometry']['coordinates'];
+        final double durationSeconds = data['features'][0]['properties']['segments'][0]['duration'];
+        final double distanceKm = data['features'][0]['properties']['segments'][0]['distance'] / 1000;
+        
+        setState(() {
+          _routePoints = coordinates.map((coord) => LatLng(coord[1], coord[0])).toList();
+          _zoom = 18.49;
+          
+          // Update ETAs
+          final walkingTotalSeconds = durationSeconds.round();
+          final walkingMinutes = walkingTotalSeconds ~/ 60;
+          final walkingSeconds = walkingTotalSeconds % 60;
+          _walkingEta = '${walkingMinutes}min ${walkingSeconds.toString().padLeft(2, '0')}s';
+          
+          final drivingTotalSeconds = (durationSeconds / 3).round();
+          final drivingMinutes = drivingTotalSeconds ~/ 60;
+          final drivingSeconds = drivingTotalSeconds % 60;
+          _drivingEta = '${drivingMinutes}min ${drivingSeconds.toString().padLeft(2, '0')}s';
+          
+          _distance = '${distanceKm.toStringAsFixed(2)} km';
+        });
+
+        _mapController.move(_currentLocation!, _zoom);
+        _startNavigationUpdates();
+      }
+    } catch (e) {
+      print('Route calculation error: $e');
       setState(() {
-        _routePoints = coordinates
-            .map((coord) => LatLng(coord[1], coord[0]))
-            .toList();
-        _zoom = 18.49;
-        
-        // Calculate minutes and seconds for walking
-        int walkingTotalSeconds = durationSeconds.round();
-        int walkingMinutes = walkingTotalSeconds ~/ 60;
-        int walkingSeconds = walkingTotalSeconds % 60;
-        _walkingEta = '${walkingMinutes}min ${walkingSeconds.toString().padLeft(2, '0')}s';
-        
-        // Calculate minutes and seconds for driving (roughly 1/3 of walking time)
-        int drivingTotalSeconds = (durationSeconds / 3).round();
-        int drivingMinutes = drivingTotalSeconds ~/ 60;
-        int drivingSeconds = drivingTotalSeconds % 60;
-        _drivingEta = '${drivingMinutes}min ${drivingSeconds.toString().padLeft(2, '0')}s';
-        
-        _distance = '${distanceKm.toStringAsFixed(2)} km';
+        _isNavigating = false;
       });
-      _mapController.move(_currentLocation!, 18.49);
-      _startNavigationUpdates();
-    } else {
-      print('Error: ${response.statusCode}');
     }
   }
 
   void _startNavigationUpdates() {
     if (!_isNavigating) return;
+    
+    // Cancel previous timers
+    _arrivalCheckTimer?.cancel();
 
-    // Initial arrival check
-    _checkArrival();
-
-    Geolocator.getPositionStream(
+    _navigationStream?.cancel();
+    _navigationStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation, // Increased accuracy
-        distanceFilter: 1, // Update every 1 meter for more precise checks
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 1,
       ),
     ).listen((Position position) {
-      if (!_isNavigating) return;
+      if (!mounted || !_isNavigating) return;
 
+      final newLocation = LatLng(position.latitude, position.longitude);
       setState(() {
-        _currentLocation = LatLng(position.latitude, position.longitude);
-        _mapController.moveAndRotate(
-          _currentLocation!,
-          _zoom,
-          _bearing
-        );
+        _currentLocation = newLocation;
+        _mapController.moveAndRotate(_currentLocation!, _zoom, _bearing);
       });
       
-      // Check arrival after location update
+      // Call _checkArrival directly
       _checkArrival();
     });
 
-    // Start periodic recentering
-    _recenterTimer?.cancel();
-    _recenterTimer = Timer.periodic(_recenterInterval, (timer) {
-      if (_currentLocation != null && _isNavigating) {
-        _mapController.move(_currentLocation!, _zoom);
+    // Set last recorded location to current at start of navigation
+    _lastRecordedLocation = _currentLocation;
+    
+    // Initial arrival check
+    _checkArrival();
+    
+    // Add a dedicated timer for arrival checking with reduced frequency (since _checkArrival is now async)
+    _arrivalCheckTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_isNavigating && !_hasShownArrivalDialog) {
+        _checkArrival();
       }
     });
   }
@@ -706,8 +790,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _checkArrival() {
-    if (_currentLocation != null && _destinationLocation != null && !_hasShownArrivalDialog) {
+  Future<void> _checkArrival() async {
+    if (_currentLocation != null && _destinationLocation != null && _isNavigating && !_hasShownArrivalDialog) {
       final distance = Geolocator.distanceBetween(
         _currentLocation!.latitude,
         _currentLocation!.longitude,
@@ -715,29 +799,100 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         _destinationLocation!.longitude,
       );
 
-      print('Distance to destination: $distance meters'); // Debug print
+      print('Distance to destination: $distance meters');
 
-      if (distance <= 5) { // 5 meters
+      // Increase threshold to 10 meters for better arrival detection
+      if (distance <= 10) {
+        // Set flag immediately to prevent multiple dialogs
         _hasShownArrivalDialog = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => ArrivalDialog(
-              landmarkName: _destinationName ?? 'Destination',
-              onClose: () {
-                Navigator.of(context).pop();
-                setState(() {
-                  _isNavigating = false;
-                  _destinationLocation = null;
-                  _destinationName = null;
-                  _routePoints.clear();
-                  _hasShownArrivalDialog = false;
-                });
-              },
-            ),
-          );
-        });
+        
+        try {
+          // Calculate and award points for this trip before showing dialog
+          if (_totalDistanceTraveled > 0) {
+            // First, round the distance to ensure consistency
+            final roundedDistance = double.parse(_totalDistanceTraveled.toStringAsFixed(2));
+            
+            // Store both the distance and earned points that will be saved
+            final pointsToSave = (roundedDistance * PointsService.pointsPerKm).round();
+            
+            print('Trip complete! Final distance: $roundedDistance km, points: $pointsToSave');
+            
+            // Update the points for the dialog display
+            _pointsEarnedThisTrip = pointsToSave;
+            
+            // IMPORTANT: Pass the exact same rounded distance to the service
+            await _pointsService.recordDistanceTraveled(roundedDistance);
+            print('Points recorded successfully: $pointsToSave');
+            
+            // Reset tracked distance after saving
+            _totalDistanceTraveled = 0.0;
+            
+            // Reload user details to get latest points
+            await _loadUserDetails();
+            
+            // Only now show the dialog, after data is saved
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => ArrivalDialog(
+                  landmarkName: _destinationName ?? 'Destination',
+                  pointsEarned: _pointsEarnedThisTrip,
+                  distanceTraveled: roundedDistance, // Pass the traveled distance
+                  onClose: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _isNavigating = false;
+                      _destinationLocation = null;
+                      _destinationName = null;
+                      _routePoints.clear();
+                      _hasShownArrivalDialog = false;
+                      _bearing = 0.0;
+                      _mapController.rotate(0.0);
+                      _pointsEarnedThisTrip = 0;
+                    });
+                    
+                    _navigationStream?.cancel();
+                    _arrivalCheckTimer?.cancel();
+                  },
+                ),
+              );
+            }
+          } else {
+            // Show dialog even if no distance traveled (for direct arrivals)
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => ArrivalDialog(
+                  landmarkName: _destinationName ?? 'Destination',
+                  pointsEarned: 0,
+                  distanceTraveled: 0.0, // Zero distance
+                  onClose: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _isNavigating = false;
+                      _destinationLocation = null;
+                      _destinationName = null;
+                      _routePoints.clear();
+                      _hasShownArrivalDialog = false;
+                      _bearing = 0.0;
+                      _mapController.rotate(0.0);
+                      _pointsEarnedThisTrip = 0;
+                    });
+                    
+                    _navigationStream?.cancel();
+                    _arrivalCheckTimer?.cancel();
+                  },
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('Error processing arrival: $e');
+          // Reset the flag in case of error so a retry is possible
+          _hasShownArrivalDialog = false;
+        }
       }
     }
   }
@@ -746,8 +901,18 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     showDialog(
       context: context,
       builder: (context) => CancelNavigationDialog(
-        onConfirm: () {
+        onConfirm: () async {
+          // Save any distance points before canceling navigation
+          if (_totalDistanceTraveled > 0) {
+            // Apply consistent rounding
+            final roundedDistance = double.parse(_totalDistanceTraveled.toStringAsFixed(2));
+            await _pointsService.recordDistanceTraveled(roundedDistance);
+            _totalDistanceTraveled = 0.0;
+            await _loadUserDetails(); // Reload points display
+          }
+          
           Navigator.pop(context);
+          _navigationStream?.cancel();
           setState(() {
             _isNavigating = false;
             _destinationLocation = null;
@@ -761,6 +926,61 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         onCancel: () => Navigator.pop(context),
       ),
     );
+  }
+
+  void _setupPointsTracking() {
+    // Track location for points every 20 seconds or 5 meters moved
+    Timer.periodic(const Duration(seconds: 5), (_) {
+      _calculateAndAwardPoints();
+    });
+  }
+  
+  void _calculateAndAwardPoints() async {
+    if (_currentLocation == null) return;
+    
+    // Initialize lastRecordedLocation if null
+    if (_lastRecordedLocation == null) {
+      _lastRecordedLocation = _currentLocation;
+      return;
+    }
+    
+    // Calculate distance between current and last recorded location
+    final double distanceMeters = Geolocator.distanceBetween(
+      _lastRecordedLocation!.latitude,
+      _lastRecordedLocation!.longitude, 
+      _currentLocation!.latitude,
+      _currentLocation!.longitude
+    );
+    
+    print('Distance moved: $distanceMeters meters');
+    
+    // Only count if moved more than the threshold distance
+    if (distanceMeters >= _minDistanceThreshold) {
+      // Convert to km with consistent rounding to 2 decimal places
+      double distanceKm = double.parse((distanceMeters / 1000).toStringAsFixed(2));
+      _totalDistanceTraveled += distanceKm;
+      
+      print('Total distance accumulated: $_totalDistanceTraveled km');
+      
+      // Update last recorded location
+      _lastRecordedLocation = _currentLocation;
+      
+      // Save to Firebase when threshold is reached
+      if (_totalDistanceTraveled >= _pointSaveThreshold / 1000) { // Convert threshold to km
+        // Round total distance to ensure consistency with what's shown in dialog
+        final roundedDistance = double.parse(_totalDistanceTraveled.toStringAsFixed(2));
+        print('Threshold reached, recording distance: $roundedDistance km');
+        
+        // Record the distance and update points
+        await _pointsService.recordDistanceTraveled(roundedDistance);
+        
+        // Reload user points after recording
+        await _loadUserDetails();
+        
+        // Reset tracked distance after saving
+        _totalDistanceTraveled = 0.0;
+      }
+    }
   }
 
   void _handleLandmarkSelection(Map<String, dynamic> landmark) {
@@ -777,8 +997,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          _currentLocation == null
-              ? const Center(child: CircularProgressIndicator())
+          !_isLocationReady || _currentLocation == null
+              ? const Center(child: LoadingScreen())
               : FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(

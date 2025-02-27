@@ -61,6 +61,7 @@ class FirebaseAuthService {
           'name': user.displayName,
           'photoUrl': user.photoURL,
           'points': 0,
+          'distance': 0,
         });
         return 'user';
       }
