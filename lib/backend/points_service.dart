@@ -129,11 +129,18 @@ class PointsService {
       // Update local cache
       try {
         SharedPreferences prefs = await SharedPreferences.getInstance();
+        
+        // Update points
         int currentPoints = prefs.getInt('points') ?? 0;
         int newPoints = currentPoints + pointsEarned;
         await prefs.setInt('points', newPoints);
         
-        print('Local cache updated, new points: $newPoints');
+        // Update distance
+        double currentDistance = prefs.getDouble('distance') ?? 0.0;
+        double newDistance = currentDistance + distanceKm;
+        await prefs.setDouble('distance', newDistance);
+        
+        print('Local cache updated, new points: $newPoints, new distance: $newDistance km');
       } catch (e) {
         print('Error updating local cache: $e');
       }

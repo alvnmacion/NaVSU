@@ -24,6 +24,8 @@ import 'package:navsu/ui/dialog/cancel_navigation_dialog.dart';
 import 'package:navsu/backend/firebaseauth.dart';
 import 'package:navsu/ui/screens/signin_page.dart';
 import 'package:navsu/backend/points_service.dart';
+import 'package:navsu/ui/screens/leaderboard_screen.dart'; // Add import at the top
+import 'package:firebase_auth/firebase_auth.dart';  // Make sure this import exists
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -68,6 +70,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   String? _userPhotoUrl;
   String? _userName;
   String? _userPoints; // Add this property
+  String? _userDistance; // Add this property with other user-related properties
   bool _isMenuOpen = false;
   final LayerLink _menuLayerLink = LayerLink();
   OverlayEntry? _menuOverlay;
@@ -90,6 +93,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Timer? _arrivalCheckTimer;
   int _pointsEarnedThisTrip = 0;
 
+  // Add this new property to track the Firestore listener
+  StreamSubscription<DocumentSnapshot>? _userDataSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -100,15 +106,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _startCompassUpdates();
     _loadUserDetails();
     _setupPointsTracking();
+    _startUserDataListener(); // Add this line to start listening for user data updates
   }
 
   Future<void> _loadUserDetails() async {
     final prefs = await SharedPreferences.getInstance();
     final points = prefs.getInt('points') ?? 0;
+    final distance = prefs.getDouble('distance') ?? 0.0;
+    
     setState(() {
       _userPhotoUrl = prefs.getString('photoUrl');
       _userName = prefs.getString('name');
       _userPoints = _formatNumber(points);
+      _userDistance = distance.toStringAsFixed(2); // Format distance to 2 decimal places
     });
   }
 
@@ -266,33 +276,84 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 const Icon(
                                   Icons.stars_rounded,
                                   color: Colors.amber,
-                                  size: 26,
+                                  size: 22,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   _userPoints ?? '0',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 20,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'points',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Navigation Points',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            
+                            const SizedBox(height: 8),
+                            const Divider(height: 1, color: Colors.white24),
+                            const SizedBox(height: 8),
+                            
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.directions_walk,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _userDistance ?? '0.00',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'km traveled',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.leaderboard, color: Colors.green.shade700),
+                  title: Text(
+                    'Leaderboard',
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    _hideMenu();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LeaderboardScreen()),
+                    );
+                  },
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -407,6 +468,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _pointsService.recordDistanceTraveled(_totalDistanceTraveled);
     }
     _arrivalCheckTimer?.cancel();
+    // Cancel the user data subscription
+    _userDataSubscription?.cancel();
     super.dispose();
   }
 
@@ -638,6 +701,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         _checkArrival();
       }
     });
+
+    // Reset distance tracking when starting navigation
+    _totalDistanceTraveled = 0.0;
+    _lastRecordedLocation = _currentLocation;
   }
 
   void _startCompassUpdates() {
@@ -936,7 +1003,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
   
   void _calculateAndAwardPoints() async {
-    if (_currentLocation == null) return;
+    // Only track points when actively navigating
+    if (!_isNavigating || _currentLocation == null) return;
     
     // Initialize lastRecordedLocation if null
     if (_lastRecordedLocation == null) {
@@ -952,7 +1020,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _currentLocation!.longitude
     );
     
-    print('Distance moved: $distanceMeters meters');
+    print('Navigation distance moved: $distanceMeters meters');
     
     // Only count if moved more than the threshold distance
     if (distanceMeters >= _minDistanceThreshold) {
@@ -960,7 +1028,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       double distanceKm = double.parse((distanceMeters / 1000).toStringAsFixed(2));
       _totalDistanceTraveled += distanceKm;
       
-      print('Total distance accumulated: $_totalDistanceTraveled km');
+      print('Total navigation distance accumulated: $_totalDistanceTraveled km');
       
       // Update last recorded location
       _lastRecordedLocation = _currentLocation;
@@ -987,6 +1055,60 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _focusOnLandmark(landmark);
     _searchFocusNode.unfocus();
     _searchController.text = landmark['name'];
+  }
+
+  // Add this new method to listen for user data changes
+  void _startUserDataListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    _userDataSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final data = snapshot.data()!;
+        
+        // Extract points data
+        int points = 0;
+        if (data['points'] != null) {
+          points = data['points'] is int 
+              ? data['points'] 
+              : int.tryParse(data['points'].toString()) ?? 0;
+        }
+        
+        // Extract distance data
+        double distance = 0.0;
+        if (data['distance'] != null) {
+          distance = data['distance'] is double 
+              ? data['distance'] 
+              : double.tryParse(data['distance'].toString()) ?? 0.0;
+        }
+        
+        // Update SharedPreferences
+        _updateLocalUserData(points, distance);
+        
+        // Update UI if mounted
+        if (mounted) {
+          setState(() {
+            _userPoints = _formatNumber(points);
+            _userDistance = distance.toStringAsFixed(2);
+          });
+        }
+      }
+    });
+  }
+  
+  // Add helper method to update SharedPreferences
+  Future<void> _updateLocalUserData(int points, double distance) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('points', points);
+      await prefs.setDouble('distance', distance);
+    } catch (e) {
+      print('Error updating local user data: $e');
+    }
   }
 
   @override
