@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:ui';
+import 'package:intl/intl.dart';
 import 'package:navsu/ui/dialog/admin_dialogs/admin_action_dialogs.dart';
 import 'package:navsu/ui/dialog/admin_dialogs/reward_dialog.dart';
 
 class RewardsTab extends StatelessWidget {
   const RewardsTab({super.key});
+  
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<QuerySnapshot>(
@@ -21,104 +23,18 @@ class RewardsTab extends StatelessWidget {
           }
 
           final rewards = snapshot.data!.docs;
+          
+          if (rewards.isEmpty) {
+            return const Center(child: Text('No rewards available.'));
+          }
 
-          return ListView.builder(
-            itemCount: rewards.length,
-            itemBuilder: (context, index) {
-              final reward = rewards[index].data() as Map<String, dynamic>;
-              
-              return Card(
-                margin: const EdgeInsets.all(16),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withOpacity(0.2)),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: CachedNetworkImage(
-                              imageUrl: reward['photoUrl'] ?? '',
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[200],
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.error),
-                              ),
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          reward['name'],
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 8),
-                            _buildInfoRow(Icons.stars, '${reward['points']} Points'),
-                            const SizedBox(height: 4),
-                            _buildInfoRow(Icons.inventory_2, '${reward['quantity']} Available'),
-                          ],
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Colors.green),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          color: Colors.white,
-                          itemBuilder: (context) => [
-                            _buildPopupMenuItem('edit', Icons.edit, 'Edit'),
-                            _buildPopupMenuItem('delete', Icons.delete, 'Delete'),
-                          ],
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _showEditRewardDialog(context, rewards[index]);
-                            } else if (value == 'delete') {
-                              _showDeleteConfirmation(context, rewards[index]);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
+          final screenWidth = MediaQuery.of(context).size.width;
+          
+          if (screenWidth < 600) {
+            return _buildListView(context, rewards);
+          } else {
+            return _buildGridView(context, rewards);
+          }
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -130,17 +46,357 @@ class RewardsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(color: Colors.grey[600]),
-        ),
-      ],
+  Widget _buildListView(BuildContext context, List<QueryDocumentSnapshot> rewards) {
+    return RefreshIndicator(
+      onRefresh: () async {},
+      color: Colors.green,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: rewards.length,
+        itemBuilder: (context, index) {
+          final reward = rewards[index].data() as Map<String, dynamic>;
+          final rewardId = rewards[index].id;
+          
+          return Card(
+            elevation: 2,
+            margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showEditRewardDialog(context, rewards[index]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 140,
+                          child: CachedNetworkImage(
+                            imageUrl: reward['photoUrl'] ?? '',
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[200],
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey[200],
+                              child: const Icon(Icons.broken_image_outlined, size: 40),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 60,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.7),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 10,
+                        left: 12,
+                        right: 12,
+                        child: Text(
+                          reward['name'] ?? 'Unnamed Reward',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.stars_rounded, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                NumberFormat.compact().format(reward['points'] ?? 0),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: (reward['quantity'] ?? 0) > 0 
+                                ? Colors.green.withOpacity(0.8)
+                                : Colors.red.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${reward['quantity'] ?? 0} left',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (reward['location'] != null && reward['location'].toString().isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.location_on, size: 18, color: Colors.blue),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Claim at: ${reward['location']}',
+                                    style: TextStyle(
+                                      color: Colors.blue[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () => _showEditRewardDialog(context, rewards[index]),
+                              icon: const Icon(Icons.edit, size: 18),
+                              label: const Text('Edit'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                foregroundColor: Colors.blue,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _showDeleteConfirmation(context, rewards[index]),
+                              icon: const Icon(Icons.delete, size: 18),
+                              label: const Text('Delete'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                foregroundColor: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildGridView(BuildContext context, List<QueryDocumentSnapshot> rewards) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.85,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: rewards.length,
+      itemBuilder: (context, index) {
+        final reward = rewards[index].data() as Map<String, dynamic>;
+        
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _showEditRewardDialog(context, rewards[index]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 120,
+                      child: CachedNetworkImage(
+                        imageUrl: reward['photoUrl'] ?? '',
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[200],
+                          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.broken_image, size: 40),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          '${reward['quantity'] ?? 0} left',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.stars_rounded, color: Colors.white, size: 14),
+                            const SizedBox(width: 2),
+                            Text(
+                              NumberFormat.compact().format(reward['points'] ?? 0),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          reward['name'] ?? 'Unnamed Reward',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        if (reward['location'] != null && reward['location'].toString().isNotEmpty)
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    reward['location'],
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              onPressed: () => _showEditRewardDialog(context, rewards[index]),
+                              icon: const Icon(Icons.edit, size: 20),
+                              color: Colors.blue,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: 'Edit',
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () => _showDeleteConfirmation(context, rewards[index]),
+                              icon: const Icon(Icons.delete, size: 20),
+                              color: Colors.red,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: 'Delete',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -149,7 +405,7 @@ class RewardsTab extends StatelessWidget {
       value: value,
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.green[700]),
+          Icon(icon, size: 20, color: Colors.grey[700]),
           const SizedBox(width: 8),
           Text(text),
         ],
@@ -163,12 +419,13 @@ class RewardsTab extends StatelessWidget {
       builder: (context) => RewardDialog(
         title: 'Add Reward',
         submitText: 'Add',
-        onSave: (name, points, quantity, photoUrl) async {
+        onSave: (name, points, quantity, photoUrl, location) async {  // Updated parameter list
           await FirebaseFirestore.instance.collection('rewards').add({
             'name': name,
             'points': points,
             'quantity': quantity,
             'photoUrl': photoUrl,
+            'location': location,  // Save location field
             'created_at': FieldValue.serverTimestamp(),
           });
         },
@@ -187,12 +444,14 @@ class RewardsTab extends StatelessWidget {
         initialPoints: data['points'].toString(),
         initialQuantity: data['quantity'].toString(),
         initialPhotoUrl: data['photoUrl'],
-        onSave: (name, points, quantity, photoUrl) async {
+        initialLocation: data['location'],  // Pass the existing location
+        onSave: (name, points, quantity, photoUrl, location) async {  // Updated parameter list
           await reward.reference.update({
             'name': name,
             'points': points,
             'quantity': quantity,
             'photoUrl': photoUrl,
+            'location': location,  // Update location field
           });
         },
       ),

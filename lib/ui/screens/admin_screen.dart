@@ -12,6 +12,7 @@ import 'package:navsu/ui/screens/signin_page.dart';
 import 'package:navsu/ui/screens/admin/tabs/landmark_approval_tab.dart';
 import 'package:navsu/ui/screens/admin/tabs/user_authorization_tab.dart';
 import 'package:navsu/ui/screens/admin/tabs/rewards_tab.dart';
+import 'package:navsu/ui/screens/admin/rewards_approval_tab.dart'; // Add this import
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -27,7 +28,7 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this); // Update tab count to 4 to include rewards approval tab
   }
 
   @override
@@ -66,6 +67,7 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
                               Tab(text: 'Landmarks', icon: Icon(Icons.place)),
                               Tab(text: 'Users', icon: Icon(Icons.people)),
                               Tab(text: 'Rewards', icon: Icon(Icons.card_giftcard)),
+                              Tab(text: 'Redeems', icon: Icon(Icons.redeem)), // Add new tab
                             ],
                             labelColor: Colors.green,
                             unselectedLabelColor: Colors.grey,
@@ -78,6 +80,7 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
                                 LandmarkApprovalTab(),
                                 UserAuthorizationTab(),
                                 RewardsTab(),
+                                RewardsApprovalTab(), // Add new tab view
                               ],
                             ),
                           ),

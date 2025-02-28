@@ -26,6 +26,7 @@ import 'package:navsu/ui/screens/signin_page.dart';
 import 'package:navsu/backend/points_service.dart';
 import 'package:navsu/ui/screens/leaderboard_screen.dart'; // Add import at the top
 import 'package:firebase_auth/firebase_auth.dart';  // Make sure this import exists
+import 'package:navsu/ui/screens/rewards_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -336,6 +337,24 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       ),
                     ],
                   ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.card_giftcard, color: Colors.yellow.shade700),
+                  title: Text(
+                    'Redeem Rewards',
+                    style: TextStyle(
+                      color: Colors.yellow.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    _hideMenu();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const RewardsScreen()),
+                    );
+                  },
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -669,6 +688,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     
     // Cancel previous timers
     _arrivalCheckTimer?.cancel();
+    _recenterTimer?.cancel();
 
     _navigationStream?.cancel();
     _navigationStream = Geolocator.getPositionStream(
@@ -682,29 +702,34 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       final newLocation = LatLng(position.latitude, position.longitude);
       setState(() {
         _currentLocation = newLocation;
+        // Always center map on current location during navigation with proper rotation
         _mapController.moveAndRotate(_currentLocation!, _zoom, _bearing);
       });
       
       // Call _checkArrival directly
       _checkArrival();
     });
-
-    // Set last recorded location to current at start of navigation
+    
+    // Reset distance tracking when starting navigation
+    _totalDistanceTraveled = 0.0;
     _lastRecordedLocation = _currentLocation;
+    
+    // Add a periodic re-centering timer to ensure map stays centered
+    _recenterTimer = Timer.periodic(_recenterInterval, (_) {
+      if (_currentLocation != null && _isNavigating && mounted) {
+        _mapController.moveAndRotate(_currentLocation!, _zoom, _bearing);
+      }
+    });
     
     // Initial arrival check
     _checkArrival();
     
-    // Add a dedicated timer for arrival checking with reduced frequency (since _checkArrival is now async)
+    // Setup arrival checking timer
     _arrivalCheckTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_isNavigating && !_hasShownArrivalDialog) {
         _checkArrival();
       }
     });
-
-    // Reset distance tracking when starting navigation
-    _totalDistanceTraveled = 0.0;
-    _lastRecordedLocation = _currentLocation;
   }
 
   void _startCompassUpdates() {
