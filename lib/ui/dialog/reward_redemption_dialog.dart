@@ -233,18 +233,19 @@ class RewardRedemptionDialog extends StatelessWidget {
                                   Row(
                                     children: [
                                       // Cancel button
-                                      Expanded(
+                                        Expanded(
                                         child: OutlinedButton(
                                           onPressed: () => Navigator.of(context).pop(false),
                                           style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(vertical: 12),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          side: const BorderSide(color: Colors.black),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
                                           ),
-                                          child: const Text('Cancel'),
+                                          ),
+                                          child: const Text('Cancel', style: TextStyle(color: Colors.black)),
                                         ),
-                                      ),
+                                        ),
                                       const SizedBox(width: 16),
                                       
                                       // Confirm button
