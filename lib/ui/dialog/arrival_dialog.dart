@@ -20,7 +20,7 @@ class ArrivalDialog extends StatelessWidget {
     // Get screen size to make dialog responsive
     final screenSize = MediaQuery.of(context).size;
     final dialogWidth = screenSize.width * 0.85; // 85% of screen width
-    final maxDialogWidth = 400.0; // Maximum width for larger screens
+    const maxDialogWidth = 400.0; // Maximum width for larger screens
     
     // Use the minimum of calculated width or max width
     final width = dialogWidth < maxDialogWidth ? dialogWidth : maxDialogWidth;

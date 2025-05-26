@@ -4,9 +4,64 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:navsu/ui/dialog/admin_dialogs/admin_action_dialogs.dart';
 import 'package:navsu/ui/dialog/admin_dialogs/reward_dialog.dart';
+import 'dart:convert'; // Add this import for base64 functions
+import 'dart:typed_data'; // Add this import for Uint8List
 
 class RewardsTab extends StatelessWidget {
   const RewardsTab({super.key});
+  
+  // Helper method to convert base64 image to bytes
+  Uint8List? _getImageBytes(String? photoUrl) {
+    if (photoUrl == null || photoUrl.isEmpty) {
+      return null;
+    }
+    
+    try {
+      if (photoUrl.startsWith('data:image')) {
+        // Extract the base64 part (after the comma)
+        final base64String = photoUrl.split(',')[1];
+        return base64Decode(base64String);
+      }
+    } catch (e) {
+      debugPrint('Error decoding image: $e');
+    }
+    return null;
+  }
+  
+  // Helper to build image widget from photoUrl
+  Widget _buildRewardImage(String? photoUrl, {BoxFit fit = BoxFit.cover}) {
+    final imageBytes = _getImageBytes(photoUrl);
+    
+    if (imageBytes != null) {
+      return Image.memory(
+        imageBytes,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.broken_image_outlined, size: 40),
+        ),
+      );
+    } else if (photoUrl != null && photoUrl.isNotEmpty && !photoUrl.startsWith('data:image')) {
+      // Fallback to CachedNetworkImage for regular URLs
+      return CachedNetworkImage(
+        imageUrl: photoUrl,
+        fit: fit,
+        placeholder: (context, url) => Container(
+          color: Colors.grey[200],
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.broken_image_outlined, size: 40),
+        ),
+      );
+    } else {
+      return Container(
+        color: Colors.grey[200],
+        child: const Icon(Icons.broken_image_outlined, size: 40),
+      );
+    }
+  }
   
   @override
   Widget build(BuildContext context) {
@@ -79,18 +134,7 @@ class RewardsTab extends StatelessWidget {
                         child: SizedBox(
                           width: double.infinity,
                           height: 140,
-                          child: CachedNetworkImage(
-                            imageUrl: reward['photoUrl'] ?? '',
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey[200],
-                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.broken_image_outlined, size: 40),
-                            ),
-                          ),
+                          child: _buildRewardImage(reward['photoUrl']),
                         ),
                       ),
                       Positioned(
@@ -270,18 +314,7 @@ class RewardsTab extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       height: 120,
-                      child: CachedNetworkImage(
-                        imageUrl: reward['photoUrl'] ?? '',
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[200],
-                          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.broken_image, size: 40),
-                        ),
-                      ),
+                      child: _buildRewardImage(reward['photoUrl']),
                     ),
                     Positioned(
                       top: 8,

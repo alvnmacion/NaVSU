@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:navsu/backend/backend_service.dart';
-import 'package:auto_size_text/auto_size_text.dart';
+import 'dart:typed_data';
+import 'dart:convert';
 
 class RewardsApprovalTab extends StatefulWidget {
   const RewardsApprovalTab({super.key});
@@ -148,12 +149,50 @@ class _RewardsApprovalTabState extends State<RewardsApprovalTab> {
     );
   }
   
+  // Add this helper to handle both Uint8List and String (URL/base64) images
+  Widget _buildRewardImage(dynamic imageData, {BoxFit fit = BoxFit.cover}) {
+    if (imageData is Uint8List && imageData.isNotEmpty) {
+      return Image.memory(
+        imageData,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+      );
+    } else if (imageData is String && imageData.isNotEmpty) {
+      // Try to decode as base64
+      try {
+        if (imageData.startsWith('data:image')) {
+          final parts = imageData.split(',');
+          if (parts.length > 1) {
+            final bytes = base64Decode(parts[1]);
+            return Image.memory(
+              bytes,
+              fit: fit,
+              errorBuilder: (context, error, stackTrace) => _buildPlaceholderImage(),
+            );
+          }
+        } else {
+          return CachedNetworkImage(
+            imageUrl: imageData,
+            fit: fit,
+            placeholder: (context, url) => _buildLoadingPlaceholder(),
+            errorWidget: (context, url, error) => _buildPlaceholderImage(),
+          );
+        }
+      } catch (_) {
+        return _buildPlaceholderImage();
+      }
+    }
+    return _buildPlaceholderImage();
+  }
+
   Widget _buildRedemptionCard(Map<String, dynamic> redemption) {
     // Extract timestamp
     final DateTime timestamp = 
         redemption['timestamp'] is Timestamp 
             ? (redemption['timestamp'] as Timestamp).toDate() 
             : DateTime.now();
+    
+    final dynamic rewardImage = redemption['rewardImage'];
     
     return Card(
       color: Colors.white,
@@ -268,29 +307,17 @@ class _RewardsApprovalTabState extends State<RewardsApprovalTab> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Reward image
-                      if (redemption['rewardImage'] != null)
-                        Center(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              height: 140,
-                              width: double.infinity,
-                              child: CachedNetworkImage(
-                                imageUrl: redemption['rewardImage'],
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[200],
-                                  child: const Center(child: CircularProgressIndicator()),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.card_giftcard, color: Colors.grey),
-                                ),
-                              ),
-                            ),
+                      // Reward image (now supports Uint8List)
+                      Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            height: 140,
+                            width: double.infinity,
+                            child: _buildRewardImage(rewardImage),
                           ),
                         ),
+                      ),
                       
                       const SizedBox(height: 16),
                       
@@ -330,27 +357,15 @@ class _RewardsApprovalTabState extends State<RewardsApprovalTab> {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Reward image
-                      if (redemption['rewardImage'] != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: CachedNetworkImage(
-                              imageUrl: redemption['rewardImage'],
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[200],
-                                child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.card_giftcard, color: Colors.grey),
-                              ),
-                            ),
-                          ),
+                      // Reward image (now supports Uint8List)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          width: 100,
+                          height: 100,
+                          child: _buildRewardImage(rewardImage),
                         ),
+                      ),
                       
                       const SizedBox(width: 16),
                       
@@ -528,5 +543,28 @@ class _RewardsApprovalTabState extends State<RewardsApprovalTab> {
     if (confirmed) {
       onConfirm();
     }
+  }
+  
+  Widget _buildLoadingPlaceholder() {
+    return Container(
+      color: Colors.grey[200],
+      child: const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildPlaceholderImage() {
+    return Container(
+      color: Colors.grey[200],
+      child: const Icon(
+        Icons.card_giftcard,
+        color: Colors.grey,
+        size: 48,
+      ),
+    );
   }
 }

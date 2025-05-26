@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:navsu/models/reward.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import 'dart:convert'; // Add this import for base64 functions
+import 'dart:typed_data'; // Add this import for Uint8List
 
 class RewardCard extends StatelessWidget {
   final Reward reward;
@@ -15,6 +17,65 @@ class RewardCard extends StatelessWidget {
     required this.canAfford,
     required this.onTap,
   });
+  
+  // Helper method to convert base64 image to bytes
+  Uint8List? _getImageBytes(String? photoUrl) {
+    if (photoUrl == null || photoUrl.isEmpty) {
+      return null;
+    }
+    
+    try {
+      if (photoUrl.startsWith('data:image')) {
+        // Extract the base64 part (after the comma)
+        final base64String = photoUrl.split(',')[1];
+        return base64Decode(base64String);
+      }
+    } catch (e) {
+      debugPrint('Error decoding image: $e');
+    }
+    return null;
+  }
+  
+  // Helper to build image widget from photoUrl
+  Widget _buildRewardImage(BuildContext context, {BoxFit fit = BoxFit.cover}) {
+    final imageBytes = _getImageBytes(reward.photoUrl);
+    
+    if (imageBytes != null) {
+      return Image.memory(
+        imageBytes,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.card_giftcard, color: Colors.grey),
+        ),
+      );
+    } else if (reward.photoUrl != null && reward.photoUrl!.isNotEmpty && !reward.photoUrl!.startsWith('data:image')) {
+      // Fallback to CachedNetworkImage for regular URLs
+      return CachedNetworkImage(
+        imageUrl: reward.photoUrl!,
+        fit: fit,
+        placeholder: (context, url) => Container(
+          color: Colors.grey[200],
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.card_giftcard, color: Colors.grey),
+        ),
+      );
+    } else {
+      return Container(
+        color: Colors.grey[200],
+        child: const Icon(Icons.card_giftcard, color: Colors.grey),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,25 +109,8 @@ class RewardCard extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Image with error handling
-                      CachedNetworkImage(
-                        imageUrl: reward.photoUrl ?? '',
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.card_giftcard, color: Colors.grey),
-                        ),
-                      ),
+                      // Image with error handling - replaced CachedNetworkImage with our custom method
+                      _buildRewardImage(context),
                       
                       // Available count badge
                       Positioned(

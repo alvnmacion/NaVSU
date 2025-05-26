@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'dart:ui';
-import 'package:navsu/ui/dialog/admin_dialogs/admin_action_dialogs.dart';
 
 class UserAuthorizationTab extends StatefulWidget {
   const UserAuthorizationTab({super.key});

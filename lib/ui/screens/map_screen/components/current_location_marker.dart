@@ -8,12 +8,12 @@ class CurrentLocationMarker extends StatelessWidget {
   final Animation<double> flashlightAnimation;
 
   const CurrentLocationMarker({
-    Key? key,
+    super.key,
     required this.markerSize,
     required this.compassRotation,
     required this.pulseAnimation,
     required this.flashlightAnimation,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

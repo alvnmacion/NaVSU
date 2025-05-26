@@ -10,7 +10,7 @@ class MapSearchBar extends StatelessWidget {
   final LayerLink menuLayerLink;
 
   const MapSearchBar({
-    Key? key,
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.onChanged,
@@ -18,7 +18,7 @@ class MapSearchBar extends StatelessWidget {
     required this.userPhotoUrl,
     required this.isMenuOpen,
     required this.menuLayerLink,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

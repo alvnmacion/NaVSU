@@ -3,11 +3,12 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui';
+import 'dart:typed_data'; // Add this import for Uint8List
 
 class RewardRedemptionDialog extends StatelessWidget {
   final String rewardName;
   final int rewardPoints;
-  final String? rewardImage;
+  final Uint8List? rewardImage; // Changed from String? to Uint8List?
   final int userPoints;
 
   const RewardRedemptionDialog({
@@ -74,14 +75,10 @@ class RewardRedemptionDialog extends StatelessWidget {
                                   // Main image
                                   SizedBox.expand(
                                     child: rewardImage != null
-                                      ? CachedNetworkImage(
-                                          imageUrl: rewardImage!,
+                                      ? Image.memory(
+                                          rewardImage!,
                                           fit: BoxFit.cover,
-                                          placeholder: (context, url) => Container(
-                                            color: Colors.grey[200],
-                                            child: const Center(child: CircularProgressIndicator()),
-                                          ),
-                                          errorWidget: (context, url, error) => Container(
+                                          errorBuilder: (context, error, stackTrace) => Container(
                                             color: Colors.yellow.shade50,
                                             child: Icon(
                                               Icons.card_giftcard,

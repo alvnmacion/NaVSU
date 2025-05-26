@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:navsu/backend/backend_service.dart';
 import 'package:navsu/models/reward.dart';
 import 'package:navsu/models/redemption.dart';
@@ -12,6 +10,8 @@ import 'package:navsu/ui/components/redemption_history_item.dart';
 import 'package:navsu/ui/dialog/reward_redemption_dialog.dart';
 import 'package:navsu/ui/components/empty_state.dart';
 import 'dart:async';
+import 'dart:typed_data'; // Add import for Uint8List
+import 'dart:convert'; // Add import for base64 decoding
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key});
@@ -163,13 +163,32 @@ class _RewardsScreenState extends State<RewardsScreen> with SingleTickerProvider
     // Check if already processing
     if (_isProcessing) return;
 
+    // Convert photoUrl (string) to Uint8List if available
+    Uint8List? imageBytes;
+    if (reward.photoUrl != null && reward.photoUrl!.isNotEmpty) {
+      try {
+        // If the image is stored as base64
+        if (reward.photoUrl!.startsWith('data:image')) {
+          final String base64String = reward.photoUrl!.split(',')[1];
+          imageBytes = base64Decode(base64String);
+        } else {
+          // If the image is a URL, you would need to fetch it
+          // For simplicity, we'll pass null in this case
+          imageBytes = null;
+        }
+      } catch (e) {
+        debugPrint('Error converting image: $e');
+        imageBytes = null;
+      }
+    }
+
     // Show confirmation dialog
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => RewardRedemptionDialog(
         rewardName: reward.name,
         rewardPoints: reward.points,
-        rewardImage: reward.photoUrl,
+        rewardImage: imageBytes, // Pass the byte array instead of URL
         userPoints: _userPoints,
       ),
     );

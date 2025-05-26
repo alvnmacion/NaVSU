@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:navsu/backend/firebaseauth.dart';
 import 'package:navsu/ui/screens/map_screen.dart';
-import 'package:page_transition/page_transition.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart'; // Import this
 import 'package:navsu/ui/screens/admin_screen.dart';

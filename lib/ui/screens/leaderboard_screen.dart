@@ -452,7 +452,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   
   // Helper method for building podium steps with name and distance
   Widget _buildPodiumStep(int rank, String name, double distance, double width, double height, Color color, Color textColor) {
-    return Container(
+    return SizedBox(
       width: width,
       child: Column(
         mainAxisSize: MainAxisSize.min,

@@ -3,8 +3,8 @@ class Reward {
   final String name;
   final int points;
   final int quantity;
-  final String? photoUrl;
-  final String? location; // Added location field
+  final String? photoUrl; // We'll keep this as string but store base64 data
+  final String? location;
   final DateTime? createdAt;
 
   Reward({
@@ -13,7 +13,7 @@ class Reward {
     required this.points,
     required this.quantity,
     this.photoUrl,
-    this.location, // Added location parameter
+    this.location,
     this.createdAt,
   });
 
@@ -25,8 +25,8 @@ class Reward {
           map['points'] : int.tryParse(map['points'].toString()) ?? 0,
       quantity: map['quantity'] is int ? 
           map['quantity'] : int.tryParse(map['quantity'].toString()) ?? 0,
-      photoUrl: map['photoUrl'],
-      location: map['location'], // Extract location field
+      photoUrl: map['photoUrl'], // This could now be a base64 string
+      location: map['location'],
       createdAt: map['created_at'] != null ? 
           (map['created_at'] as dynamic).toDate() : null,
     );
@@ -37,8 +37,8 @@ class Reward {
       'name': name,
       'points': points,
       'quantity': quantity,
-      'photoUrl': photoUrl,
-      'location': location, // Include location in map
+      'photoUrl': photoUrl, // Store the base64 string
+      'location': location,
     };
   }
 }

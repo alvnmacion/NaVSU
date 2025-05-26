@@ -9,14 +9,14 @@ class BottomInfo extends StatelessWidget {
   final VoidCallback onAddLandmark;
 
   const BottomInfo({
-    Key? key,
+    super.key,
     required this.walkingEta,
     required this.drivingEta,
     required this.distance,
     required this.isNavigating,
     required this.onCancelNavigation,
     required this.onAddLandmark,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

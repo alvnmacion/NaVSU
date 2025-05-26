@@ -738,8 +738,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         double newHeading = event.heading!;
         
         // Normalize heading to 0-360 range
-        while (newHeading < 0) newHeading += 360;
-        while (newHeading >= 360) newHeading -= 360;
+        while (newHeading < 0) {
+          newHeading += 360;
+        }
+        while (newHeading >= 360) {
+          newHeading -= 360;
+        }
         
         if ((_lastHeading - newHeading).abs() > _rotationThreshold) {
           setState(() {
